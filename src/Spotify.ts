@@ -3,10 +3,11 @@ import SpotifyApi, { IAuth, UserObjectPublic } from './lib/API'
 import Artist from './lib/details/Atrist'
 import Playlist from './lib/details/Playlist'
 import SongDetails from './lib/details/Track'
-import { downloadYT, downloadYTAndSave } from './lib/download'
+import { downloadYT } from './lib/download'
 import SpotifyDlError from './lib/Error'
 import getYtlink from './lib/getYtlink'
 import metadata from './lib/metadata'
+import { Readable } from 'stream'
 
 export default class SpotifyFetcher extends SpotifyApi {
     constructor(auth: IAuth) {
@@ -89,64 +90,14 @@ export default class SpotifyFetcher extends SpotifyApi {
      * @param filename file to save to
      * @returns `buffer` if no filename is provided and `string` if it is
      */
-    downloadTrack = async <T extends undefined | string>(
-        url: string,
-        filename?: T
-    ): Promise<T extends undefined ? Buffer : string> => {
+    downloadTrack = async <T extends undefined | string>(url: string, filename?: T): Promise<Readable> => {
         await this.verifyCredentials()
         const info = await this.getTrack(url)
         const link = await getYtlink(`${info.name} ${info.artists[0]}`)
         if (!link) throw new SpotifyDlError(`Couldn't get a download URL for the track: ${info.name}`)
-        const data = await downloadYTAndSave(link, filename)
-        await metadata(info, data)
-        if (!filename) {
-            const buffer = await promises.readFile(data)
-            unlink(data)
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            return buffer as any
-        }
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        return data as any
+        const data = await downloadYT(link)
+        return data
     }
-
-    /**
-     * Gets the Buffer of track from the info
-     * @param info info of the track got from `spotify.getTrack()`
-     * @returns
-     */
-    downloadTrackFromInfo = async (info: SongDetails): Promise<Buffer> => {
-        const link = await getYtlink(`${info.name} ${info.artists[0]}`)
-        if (!link) throw new SpotifyDlError(`Couldn't get a download URL for the track: ${info.name}`)
-        return await downloadYT(link)
-    }
-
-    private downloadBatch = async (url: string, type: 'album' | 'playlist'): Promise<(string | Buffer)[]> => {
-        await this.verifyCredentials()
-        const playlist = await this[type === 'album' ? 'getAlbum' : 'getPlaylist'](url)
-        return Promise.all(
-            playlist.tracks.map(async (track) => {
-                try {
-                    return await this.downloadTrack(track)
-                } catch (err) {
-                    return ''
-                }
-            })
-        )
-    }
-
-    /**
-     * Downloads the tracks of a playlist
-     * @param url URL of the playlist
-     * @returns `Promise<(string|Buffer)[]>`
-     */
-    downloadPlaylist = async (url: string): Promise<(string | Buffer)[]> => await this.downloadBatch(url, 'playlist')
-
-    /**
-     * Downloads the tracks of a Album
-     * @param url URL of the Album
-     * @returns `Promise<(string|Buffer)[]>`
-     */
-    downloadAlbum = async (url: string): Promise<(string | Buffer)[]> => await this.downloadBatch(url, 'album')
 
     /**
      * Gets the info of tracks from playlist URL

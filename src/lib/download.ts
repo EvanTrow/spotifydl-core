@@ -1,9 +1,10 @@
 import os from 'os'
-import ytdl from 'ytdl-core'
+import ytdl from '@distube/ytdl-core'
 import SpotifyDlError from './Error'
 import { readFile, unlink, writeFile } from 'fs-extra'
 import axios from 'axios'
 import Ffmpeg from 'fluent-ffmpeg'
+import { Readable } from 'stream'
 
 /**
  * Function to download the give `YTURL`
@@ -11,40 +12,12 @@ import Ffmpeg from 'fluent-ffmpeg'
  * @returns `Buffer`
  * @throws Error if the URL is invalid
  */
-export const downloadYT = async (url: string): Promise<Buffer> => {
+export const downloadYT = async (url: string): Promise<Readable> => {
     if (!ytdl.validateURL(url)) throw new SpotifyDlError('Invalid YT URL', 'SpotifyDlError')
-    const filename = `${os.tmpdir()}/${Math.random().toString(36).slice(-5)}.mp3`
-    const stream = ytdl(url, {
+    return ytdl(url, {
         quality: 'highestaudio',
         filter: 'audioonly'
     })
-    return await new Promise((resolve, reject) => {
-        Ffmpeg(stream)
-            .audioBitrate(128)
-            .save(filename)
-            .on('error', (err) => reject(err))
-            .on('end', async () => {
-                const buffer = await readFile(filename)
-                unlink(filename)
-                resolve(buffer)
-            })
-    })
-}
-
-/**
- * Function to download and save audio from youtube
- * @param url URL to download
- * @param filename the file to save to
- * @returns filename
- */
-export const downloadYTAndSave = async (url: string, filename = (Math.random() + 1).toString(36).substring(7) + '.mp3'): Promise<string> => {
-    const audio = await downloadYT(url)
-    try {
-        await writeFile(filename, audio)
-        return filename
-    } catch (err) {
-        throw new SpotifyDlError(`Error While writing to File: ${filename}`)
-    }
 }
 
 /**
